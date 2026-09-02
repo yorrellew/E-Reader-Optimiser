@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #0a0a0c;
+    color: #e0e0e0;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  /* Dark scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0d0d10;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #27272a;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+  }
+}
+
+/* E-Reader EPUB Typography Preview Classes */
+.prose-epub h1,
+.prose-epub h2,
+.prose-epub h3 {
+  font-weight: 700;
+  margin-top: 1.4em;
+  margin-bottom: 0.6em;
+  line-height: 1.25;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.prose-epub h1 {
+  font-size: 1.4em;
+}
+
+.prose-epub h2 {
+  font-size: 1.2em;
+}
+
+.prose-epub p {
+  margin-top: 0;
+  margin-bottom: 0.25em;
+  text-indent: 1.5em;
+  line-height: inherit;
+}
+
+.prose-epub p:first-of-type,
+.prose-epub h1 + p,
+.prose-epub h2 + p,
+.prose-epub .chapter-first-p {
+  text-indent: 0 !important;
+}
+
+.prose-epub blockquote {
+  margin: 1em 1.5em;
+  font-style: italic;
+  border-left: 2px solid currentColor;
+  padding-left: 1em;
+  opacity: 0.9;
+}

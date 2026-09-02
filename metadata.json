@@ -1,0 +1,6 @@
+{
+  "name": "E-Reader Cover & Metadata Studio",
+  "description": "Comprehensive tool to edit EPUB and PDF metadata, fix titles and series, optimize and inject high-resolution covers formatted specifically for e-readers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
