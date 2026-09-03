@@ -4,8 +4,16 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  // Use repository name when building in GitHub Actions (GITHUB_REPOSITORY="owner/repo"),
+  // allow BASE_PATH override, or default to relative './'
+  const repoName = process.env.GITHUB_REPOSITORY ? `/${process.env.GITHUB_REPOSITORY.split('/')[1]}/` : './';
+  const base = process.env.BASE_PATH || repoName;
+
   return {
-    base: './',
+    base,
+    build: {
+      target: 'esnext',
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

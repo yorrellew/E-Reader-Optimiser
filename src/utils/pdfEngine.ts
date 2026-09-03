@@ -1,12 +1,6 @@
 import { PDFDocument } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist';
 import { BookMetadata } from '../types';
 import JSZip from 'jszip';
-
-// Set up pdf.js worker using unpkg / cdnjs or inline worker to guarantee zero-config browser execution
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
-}
 
 export interface ParsedPdf {
   metadata: BookMetadata;
@@ -51,6 +45,10 @@ export async function parsePdf(file: File | Blob): Promise<ParsedPdf> {
   const extractedPagesText: string[] = [];
 
   try {
+    const pdfjsLib = await import('pdfjs-dist');
+    if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    }
     const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer.slice(0)) });
     const pdfJsDoc = await loadingTask.promise;
 
