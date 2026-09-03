@@ -18,24 +18,32 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
           cache: 'npm'
-          cache-dependency-path: package-lock.json
-
-      - name: Clear npm cache
-        run: npm cache clean --force
 
       - name: Install dependencies
         run: npm install --prefer-offline --no-audit
 
       - name: Build static site with Vite
         run: npm run build:pages
+
+      - name: Verify build artifacts
+        run: |
+          echo "=== Verifying dist output ==="
+          ls -la dist/
+          ls -la dist/assets/
+          if [ ! -s dist/index.html ]; then
+            echo "ERROR: dist/index.html is missing or 0 bytes!"
+            exit 1
+          fi
+          echo "SUCCESS: dist/index.html is $(wc -c < dist/index.html) bytes"
+          touch dist/.nojekyll
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
