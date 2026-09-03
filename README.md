@@ -6,21 +6,6 @@ Runs 100% in your browser with no file uploads to external servers, ensuring com
 
 ---
 
-## 🚀 Live Demo on GitHub Pages
-
-You can host and view this project on **GitHub Pages** directly from your repository!
-
-### How to Enable GitHub Pages
-
-1. Push this repository to GitHub (to branch `main` or `master`).
-2. On GitHub, navigate to your repository's **Settings** tab.
-3. In the left sidebar, select **Pages** (under the "Code and automation" section).
-4. Under **Build and deployment > Source**, choose **GitHub Actions**.
-5. That's it! The included `.github/workflows/deploy.yml` workflow will automatically build and deploy the app whenever you push changes.
-6. Your live website URL will be displayed in **Settings > Pages** (typically `https://<your-username>.github.io/<repository-name>/`).
-
----
-
 ## ✨ Features
 
 - **EPUB & PDF Support**:
