@@ -6,6 +6,33 @@ Runs 100% in your browser with no file uploads to external servers, ensuring com
 
 ---
 
+## 🚀 Live Demo on GitHub Pages
+
+You can host and view this project on **GitHub Pages** directly from your repository!
+
+### How to Deploy from a Branch (`gh-pages`)
+
+There are two easy ways to deploy from the `gh-pages` branch:
+
+#### Method A: Automated GitHub Actions (Recommended)
+1. Push this repository to GitHub (`main` or `master` branch).
+2. The included `.github/workflows/deploy.yml` workflow automatically builds the project and publishes the compiled files to the `gh-pages` branch.
+3. On GitHub, go to your repository's **Settings** > **Pages** (in the left sidebar).
+4. Under **Build and deployment**:
+   - **Source**: Select **Deploy from a branch**
+   - **Branch**: Choose **`gh-pages`** and folder **`/ (root)`**
+   - Click **Save**.
+5. Your live site will be published at `https://<your-username>.github.io/<repository-name>/`.
+
+#### Method B: One-Command Local Deploy (`npm run deploy`)
+If you want to deploy directly from your local terminal without GitHub Actions:
+```bash
+npm run deploy
+```
+This automatically builds the project (`npm run build:pages`) and pushes the `dist/` directory to the `gh-pages` branch of your GitHub repository. Then ensure your GitHub repository's **Settings > Pages** is set to **Deploy from a branch** -> `gh-pages` -> `/ (root)`.
+
+---
+
 ## ✨ Features
 
 - **EPUB & PDF Support**:
