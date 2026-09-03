@@ -22,7 +22,7 @@ import { BatchToolbar } from './components/BatchToolbar';
 import { CoverSearchModal } from './components/CoverSearchModal';
 import { TypographyCoverModal } from './components/TypographyCoverModal';
 import { EinkGuideModal } from './components/EinkGuideModal';
-import { BookOpen, Sparkles, CheckCircle2, ShieldCheck, Layers, FileArchive } from 'lucide-react';
+import { BookOpen, Sparkles, CheckCircle2, ShieldCheck, Layers, FileArchive, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const [documents, setDocuments] = useState<BookDocument[]>([]);
@@ -33,8 +33,10 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [targetFormat, setTargetFormat] = useState<string>('epub');
   const [compressionLevel, setCompressionLevel] = useState<number>(6);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; filename: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   // Modals
   const [isCoverSearchOpen, setIsCoverSearchOpen] = useState(false);
@@ -43,14 +45,25 @@ export default function App() {
 
   const selectedDocument = documents.find((doc) => doc.id === selectedDocId) || null;
 
-  // Process uploaded files (EPUB and PDF)
-  const handleFilesSelected = async (files: File[]) => {
+  // Process uploaded files (EPUB and PDF) - supporting single or bulk selection
+  const handleFilesSelected = async (files: File[] | FileList) => {
+    const fileList = Array.from(files);
+    if (fileList.length === 0) return;
+
     setIsProcessing(true);
     const newDocs: BookDocument[] = [];
+    const failedFiles: string[] = [];
 
-    for (const file of files) {
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
       const ext = file.name.split('.').pop()?.toLowerCase();
-      const id = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const id = `${Date.now()}_${i}_${Math.random().toString(36).substring(2, 9)}`;
+
+      setUploadProgress({
+        current: i + 1,
+        total: fileList.length,
+        filename: file.name,
+      });
 
       try {
         if (ext === 'epub') {
@@ -98,8 +111,12 @@ export default function App() {
         }
       } catch (err) {
         console.error(`Error parsing file ${file.name}:`, err);
-        alert(`Failed to parse "${file.name}". Please ensure it is a valid EPUB or PDF.`);
+        failedFiles.push(file.name);
       }
+    }
+
+    if (failedFiles.length > 0) {
+      alert(`Could not parse ${failedFiles.length} file(s):\n${failedFiles.join('\n')}\nPlease ensure they are valid EPUB or PDF files.`);
     }
 
     if (newDocs.length > 0) {
@@ -110,6 +127,7 @@ export default function App() {
       setSelectedBatchIds((prev) => [...prev, ...newDocs.map((d) => d.id)]);
     }
 
+    setUploadProgress(null);
     setIsProcessing(false);
   };
 
@@ -133,6 +151,21 @@ export default function App() {
       await handleFilesSelected([sample]);
     } catch (err) {
       console.error('Error loading sample PDF:', err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleLoadSampleBatch = async () => {
+    setIsProcessing(true);
+    try {
+      const [sampleEpub, samplePdf] = await Promise.all([
+        createSampleEpub(),
+        createSamplePdf(),
+      ]);
+      await handleFilesSelected([sampleEpub, samplePdf]);
+    } catch (err) {
+      console.error('Error loading sample batch:', err);
     } finally {
       setIsProcessing(false);
     }
@@ -399,17 +432,32 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0c] text-zinc-100 flex flex-col font-sans selection:bg-blue-500/30 selection:text-blue-200">
+      {/* Hidden input for multi-file bulk uploads */}
       <input
         type="file"
         multiple
-        accept=".epub,.pdf"
+        accept=".epub,.pdf,application/epub+zip,application/pdf"
         className="hidden"
         ref={fileInputRef}
         onChange={(e) => {
-          if (e.target.files) {
-            handleFilesSelected(e.target.files);
+          if (e.target.files && e.target.files.length > 0) {
+            handleFilesSelected(Array.from(e.target.files));
           }
-          // Reset value to allow selecting the same file again
+          // Reset value to allow selecting the same files again
+          e.target.value = '';
+        }}
+      />
+      {/* Hidden input for folder uploads */}
+      <input
+        type="file"
+        multiple
+        {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
+        className="hidden"
+        ref={folderInputRef}
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            handleFilesSelected(Array.from(e.target.files));
+          }
           e.target.value = '';
         }}
       />
@@ -497,6 +545,9 @@ export default function App() {
                   compressionLevel={compressionLevel}
                   onCompressionLevelChange={setCompressionLevel}
                   onAddMoreFiles={() => fileInputRef.current?.click()}
+                  onAddFolder={() => folderInputRef.current?.click()}
+                  onLoadSampleBatch={handleLoadSampleBatch}
+                  onFilesSelected={handleFilesSelected}
                   onApplyUniversal={handleApplyUniversal}
                   onBulkDownload={handleBulkDownload}
                   onClearAll={() => {
@@ -532,16 +583,16 @@ export default function App() {
                     <input
                       type="file"
                       multiple
-                      accept=".epub,.pdf"
+                      accept=".epub,.pdf,application/epub+zip,application/pdf"
                       onChange={(e) => {
-                        if (e.target.files) {
+                        if (e.target.files && e.target.files.length > 0) {
                           handleFilesSelected(Array.from(e.target.files));
                           e.target.value = '';
                         }
                       }}
                       className="hidden"
                     />
-                    <span>+ Add More EPUBs / PDFs</span>
+                    <span>+ Bulk Upload More Books (EPUB / PDF)</span>
                   </label>
                 </div>
               </div>
@@ -617,6 +668,26 @@ export default function App() {
         isOpen={isGuideModalOpen}
         onClose={() => setIsGuideModalOpen(false)}
       />
+
+      {/* Bulk Upload Progress Toast */}
+      {uploadProgress && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#16161a] border border-blue-500/40 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-3 duration-200 backdrop-blur-md">
+          <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
+            <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
+          </div>
+          <div>
+            <div className="text-xs font-bold text-zinc-100 flex items-center gap-2">
+              <span>Bulk Importing Books</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 font-mono">
+                {uploadProgress.current} / {uploadProgress.total}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400 max-w-xs truncate font-serif mt-0.5">
+              {uploadProgress.filename}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

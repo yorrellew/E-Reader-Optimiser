@@ -1,5 +1,5 @@
-import React from 'react';
-import { Download, Trash2, RefreshCw, FileArchive, Plus, CopyCheck, Settings2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Download, Trash2, RefreshCw, FileArchive, Plus, CopyCheck, Settings2, ChevronDown, FolderUp, Files, Sparkles, Upload } from 'lucide-react';
 import { RENAMING_PRESETS } from '../utils/presets';
 
 interface BatchToolbarProps {
@@ -14,6 +14,9 @@ interface BatchToolbarProps {
   onBulkDownload: () => void;
   onClearAll: () => void;
   onAddMoreFiles: () => void;
+  onAddFolder?: () => void;
+  onLoadSampleBatch?: () => void;
+  onFilesSelected?: (files: File[]) => void;
   onApplyUniversal: () => void;
   isProcessing: boolean;
 }
@@ -30,9 +33,25 @@ export const BatchToolbar: React.FC<BatchToolbarProps> = ({
   onBulkDownload,
   onClearAll,
   onAddMoreFiles,
+  onAddFolder,
+  onLoadSampleBatch,
+  onFilesSelected,
   onApplyUniversal,
   isProcessing,
 }) => {
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const optionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (optionsRef.current && !optionsRef.current.contains(event.target as Node)) {
+        setIsOptionsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   if (documentCount === 0) return null;
 
   const formats = [
@@ -63,7 +82,6 @@ export const BatchToolbar: React.FC<BatchToolbarProps> = ({
             </option>
           ))}
         </select>
-        
       </div>
 
       {/* Right: Actions */}
@@ -84,7 +102,6 @@ export const BatchToolbar: React.FC<BatchToolbarProps> = ({
         <button
           type="button"
           onClick={onApplyUniversal}
-
           disabled={isProcessing}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
           title="Apply current active document settings to all documents"
@@ -93,15 +110,153 @@ export const BatchToolbar: React.FC<BatchToolbarProps> = ({
           <span className="hidden sm:inline">Apply to All</span>
         </button>
 
-        <button
-          type="button"
-          onClick={onAddMoreFiles}
-          disabled={isProcessing}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#16161a] hover:bg-[#202026] text-zinc-200 border border-white/10 transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Add Files</span>
-        </button>
+        {/* Add Files Dropdown & Bulk Options */}
+        <div className="relative" ref={optionsRef}>
+          <div className="inline-flex items-center rounded-lg border border-white/10 bg-[#16161a] shadow-xs hover:border-white/20 transition-all">
+            <button
+              type="button"
+              onClick={onAddMoreFiles}
+              disabled={isProcessing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-l-lg text-xs font-bold text-zinc-200 hover:bg-[#202026] hover:text-white transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+              title="Bulk upload multiple files (.epub, .pdf)"
+            >
+              <Plus className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden sm:inline">Add Files</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 font-mono hidden md:inline">Bulk</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsOptionsOpen((prev) => !prev)}
+              disabled={isProcessing}
+              className="px-2 py-1.5 border-l border-white/10 rounded-r-lg text-zinc-400 hover:bg-[#202026] hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+              title="Add Files Options (Bulk Upload, Folder, Samples)"
+            >
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOptionsOpen ? 'rotate-180 text-blue-400' : ''}`} />
+            </button>
+          </div>
+
+          {isOptionsOpen && (
+            <div className="absolute right-0 mt-2 w-80 bg-[#16161a] border border-white/15 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150 space-y-1.5 backdrop-blur-md">
+              <div className="px-2.5 py-1.5 border-b border-white/10 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-zinc-300 tracking-wide">Add Files Options</span>
+                <span className="text-[10px] font-semibold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                  Bulk Upload Enabled
+                </span>
+              </div>
+
+              {/* Option 1: Multiple Files Bulk Selection */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOptionsOpen(false);
+                  onAddMoreFiles();
+                }}
+                className="w-full p-2.5 rounded-xl hover:bg-white/5 transition-colors flex items-start gap-3 text-left cursor-pointer group"
+              >
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20 group-hover:scale-105 transition-transform shrink-0 mt-0.5">
+                  <Files className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-bold text-zinc-100 group-hover:text-blue-300 transition-colors">
+                      Bulk Upload Multiple Files
+                    </span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 font-semibold shrink-0">
+                      Multi-Select
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 font-serif mt-0.5 leading-snug">
+                    Select multiple EPUBs or PDFs at once. Use <kbd className="px-1 py-0.5 rounded bg-white/10 text-[9px] font-mono text-zinc-300">Ctrl</kbd> or <kbd className="px-1 py-0.5 rounded bg-white/10 text-[9px] font-mono text-zinc-300">Shift</kbd> to select many files.
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2: Folder Upload */}
+              {onAddFolder && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOptionsOpen(false);
+                    onAddFolder();
+                  }}
+                  className="w-full p-2.5 rounded-xl hover:bg-white/5 transition-colors flex items-start gap-3 text-left cursor-pointer group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 group-hover:scale-105 transition-transform shrink-0 mt-0.5">
+                    <FolderUp className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-bold text-zinc-100 group-hover:text-emerald-300 transition-colors">
+                        Upload Entire Folder
+                      </span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold shrink-0">
+                        Folder Batch
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 font-serif mt-0.5 leading-snug">
+                      Import all e-books and PDFs contained within a local directory and subfolders.
+                    </p>
+                  </div>
+                </button>
+              )}
+
+              {/* Option 3: Sample Batch */}
+              {onLoadSampleBatch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOptionsOpen(false);
+                    onLoadSampleBatch();
+                  }}
+                  className="w-full p-2.5 rounded-xl hover:bg-white/5 transition-colors flex items-start gap-3 text-left cursor-pointer group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20 group-hover:scale-105 transition-transform shrink-0 mt-0.5">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-bold text-zinc-100 group-hover:text-amber-300 transition-colors">
+                        Load Demo Book Batch
+                      </span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-semibold shrink-0">
+                        EPUB + PDF
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 font-serif mt-0.5 leading-snug">
+                      Instantly populate the queue with sample files to test batch actions.
+                    </p>
+                  </div>
+                </button>
+              )}
+
+              {/* Quick Dropzone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsOptionsOpen(false);
+                  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    onFilesSelected?.(Array.from(e.dataTransfer.files));
+                  }
+                }}
+                onClick={() => {
+                  setIsOptionsOpen(false);
+                  onAddMoreFiles();
+                }}
+                className="mt-1 p-2.5 border border-dashed border-white/10 hover:border-blue-500/40 rounded-xl text-center bg-white/[0.02] hover:bg-blue-500/[0.04] transition-colors cursor-pointer"
+              >
+                <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-zinc-300">
+                  <Upload className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Or drag & drop multiple files here</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         <button
           type="button"
