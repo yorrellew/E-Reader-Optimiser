@@ -228,36 +228,114 @@ export const DocumentDetailEditor: React.FC<DocumentDetailEditorProps> = ({
     return 'aspect-3/4 max-w-[240px]';
   };
 
-  // AI Auto-Analysis with Gemini & Heuristic engine
+  // AI Auto-Analysis with Gemini & Heuristic engine (with client-side fallback for GitHub Pages)
   const handleAutoAnalyze = async () => {
     if (isAnalyzing) return;
     setIsAnalyzing(true);
     setSuccessFeedback(false);
 
     try {
-      const res = await fetch('/api/metadata/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(25000),
-        body: JSON.stringify({
-          sampleText: document.extractedTextSample || '',
-          rawFilename: document.originalName,
-          currentMetadata: document.metadata,
-        }),
-      });
+      let analysisResult = null;
+      let analysisSource = 'heuristic';
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || 'AI analysis request failed');
+      try {
+        const res = await fetch('/api/metadata/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(8000),
+          body: JSON.stringify({
+            sampleText: document.extractedTextSample || '',
+            rawFilename: document.originalName,
+            currentMetadata: document.metadata,
+          }),
+        }).catch(() => null);
+
+        if (res && res.ok) {
+          const data = await res.json();
+          analysisResult = data.analysis;
+          analysisSource = data.source || 'heuristic';
+        }
+      } catch {
+        // Backend not available, continue to client-side fallback
       }
 
-      const data = await res.json();
-      const analysis = data.analysis;
+      // Fallback for static hosting (e.g. GitHub Pages)
+      if (!analysisResult) {
+        const rawFilename = document.originalName;
+        const cleanName = rawFilename
+          .replace(/\.(epub|pdf|mobi|azw3|txt|cbz|cbr)$/i, '')
+          .replace(/\[(?:z-lib|libgen|retail|epub|pdf|ebook|v\d+[^\]]*)\]/gi, ' ')
+          .replace(/\((?:retail|unabridged|scan|v\d+[^)]*)\)/gi, ' ')
+          .replace(/[_\.]+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
 
-      if (analysis) {
+        let authorGuess = document.metadata.authors?.[0] || '';
+        let titleGuess = document.metadata.title || '';
+        let seriesGuess = document.metadata.series || '';
+        let seriesIndexGuess = document.metadata.seriesIndex || '';
+
+        if (!titleGuess || titleGuess === 'Untitled Document' || titleGuess === rawFilename) {
+          if (cleanName.includes(' - ')) {
+            const parts = cleanName.split(' - ').map((p) => p.trim()).filter(Boolean);
+            if (parts.length === 2) {
+              authorGuess = authorGuess || parts[0];
+              titleGuess = parts[1];
+            } else if (parts.length >= 3) {
+              authorGuess = authorGuess || parts[0];
+              seriesGuess = seriesGuess || parts[1];
+              titleGuess = parts.slice(2).join(' - ');
+            }
+          } else {
+            const byMatch = cleanName.match(/^(.+?)\s+by\s+(.+)$/i);
+            if (byMatch) {
+              titleGuess = byMatch[1].trim();
+              authorGuess = authorGuess || byMatch[2].trim();
+            } else {
+              titleGuess = cleanName;
+            }
+          }
+        }
+
+        // Check for bracketed series like (Series #1)
+        const bracketSeriesMatch = titleGuess.match(/[\[\(]([^\]\)]+?)\s*#?(\d+(?:\.\d+)?)[\]\)]/i);
+        if (bracketSeriesMatch) {
+          seriesGuess = bracketSeriesMatch[1].trim();
+          seriesIndexGuess = bracketSeriesMatch[2].trim();
+          titleGuess = titleGuess.replace(bracketSeriesMatch[0], '').trim();
+        }
+
+        analysisResult = {
+          title: titleGuess || document.metadata.title || 'Untitled Book',
+          author: authorGuess || 'Unknown Author',
+          allAuthors: authorGuess ? [authorGuess] : (document.metadata.authors || ['Unknown Author']),
+          series: seriesGuess,
+          seriesIndex: seriesIndexGuess,
+          publisher: document.metadata.publisher || '',
+          publishedDate: document.metadata.publishedDate || '',
+          description: document.metadata.description || (document.extractedTextSample?.slice(0, 300) || ''),
+          genres: document.metadata.genres?.length ? document.metadata.genres : ['General Fiction'],
+          language: document.metadata.language || 'en',
+          isbn: document.metadata.isbn || '',
+          searchQuery: `${titleGuess} ${authorGuess}`.trim(),
+          suggestedFilename: `${authorGuess || 'Unknown'} - ${titleGuess || 'Untitled'}.epub`,
+          suggestedCoverUrl: '',
+          confidenceScore: 85,
+          confidenceNotes: 'Identified using client-side metadata extraction and filename heuristics.',
+          evidenceDetails: {
+            isbnFound: document.metadata.isbn || '(None in sample)',
+            rawExcerptMatched: document.extractedTextSample ? document.extractedTextSample.slice(0, 60) + '...' : '(Title page excerpt)',
+            webCatalogMatch: 'Direct client-side extraction',
+            sourceSummary: 'Offline Heuristic Engine',
+          },
+        };
+        analysisSource = 'heuristic';
+      }
+
+      if (analysisResult) {
         setSuggestionData({
-          ...analysis,
-          source: data.source || 'heuristic',
+          ...analysisResult,
+          source: analysisSource,
         });
         setIsSuggestionModalOpen(true);
       }
@@ -275,8 +353,13 @@ export const DocumentDetailEditor: React.FC<DocumentDetailEditorProps> = ({
 
     if (applyCoverUrl) {
       try {
+        let fetchUrl = applyCoverUrl;
+        if (fetchUrl.startsWith('/api/proxy-cover')) {
+          const urlParam = new URL(fetchUrl, window.location.href).searchParams.get('url');
+          if (urlParam) fetchUrl = urlParam;
+        }
         // Fetch and convert the high-res cover into local data URL for offline durability
-        const res = await fetch(applyCoverUrl);
+        const res = await fetch(fetchUrl);
         if (res.ok) {
           const blob = await res.blob();
           const reader = new FileReader();

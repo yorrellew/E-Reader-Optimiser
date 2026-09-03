@@ -36,12 +36,100 @@ export const CoverSearchModal: React.FC<CoverSearchModalProps> = ({
     setError(null);
 
     try {
-      const res = await fetch(`/api/books/search?q=${encodeURIComponent(searchQ)}`);
-      if (!res.ok) throw new Error('Search request failed');
-      const data = await res.json();
-      setResults(data.results || []);
+      // First try backend proxy endpoint
+      const res = await fetch(`/api/books/search?q=${encodeURIComponent(searchQ)}`).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json();
+        setResults(data.results || []);
+        setIsLoading(false);
+        return;
+      }
+    } catch {
+      // Backend not available, continue to client-side fallback
+    }
+
+    // Client-side fallback: Direct query to Open Library and Google Books (works statically on GitHub Pages)
+    try {
+      const cleanQ = encodeURIComponent(searchQ.trim());
+      const fallbackResults: SearchBookResult[] = [];
+
+      const [googleRes, olRes] = await Promise.allSettled([
+        fetch(`https://www.googleapis.com/books/v1/volumes?q=${cleanQ}&maxResults=8`),
+        fetch(`https://openlibrary.org/search.json?q=${cleanQ}&limit=8`),
+      ]);
+
+      if (googleRes.status === 'fulfilled' && googleRes.value.ok) {
+        const gData = await googleRes.value.json();
+        if (gData.items && Array.isArray(gData.items)) {
+          for (const item of gData.items) {
+            const vi = item.volumeInfo || {};
+            let coverUrl =
+              vi.imageLinks?.extraLarge ||
+              vi.imageLinks?.large ||
+              vi.imageLinks?.medium ||
+              vi.imageLinks?.thumbnail ||
+              vi.imageLinks?.smallThumbnail ||
+              '';
+            if (coverUrl) {
+              coverUrl = coverUrl.replace(/^http:\/\//i, 'https://');
+            }
+            const isbn13 = vi.industryIdentifiers?.find((id: any) => id.type === 'ISBN_13')?.identifier;
+            const isbn10 = vi.industryIdentifiers?.find((id: any) => id.type === 'ISBN_10')?.identifier;
+
+            if (vi.title) {
+              fallbackResults.push({
+                source: 'Google Books',
+                id: `gb_${item.id}`,
+                title: vi.title || '',
+                authors: vi.authors || [],
+                publisher: vi.publisher || '',
+                publishedDate: vi.publishedDate || '',
+                description: vi.description || '',
+                language: vi.language || 'en',
+                categories: vi.categories || [],
+                pageCount: vi.pageCount || 0,
+                isbn: isbn13 || isbn10 || '',
+                coverUrl: coverUrl,
+              });
+            }
+          }
+        }
+      }
+
+      if (olRes.status === 'fulfilled' && olRes.value.ok) {
+        const olData = await olRes.value.json();
+        if (olData.docs && Array.isArray(olData.docs)) {
+          for (const doc of olData.docs) {
+            const coverId = doc.cover_i;
+            const coverUrl = coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : '';
+            if (doc.title) {
+              const duplicate = fallbackResults.some(
+                (r) => r.title.toLowerCase() === doc.title.toLowerCase()
+              );
+              if (!duplicate) {
+                fallbackResults.push({
+                  source: 'Open Library',
+                  id: `ol_${doc.key || Math.random().toString()}`,
+                  title: doc.title || '',
+                  authors: doc.author_name || [],
+                  publisher: doc.publisher ? doc.publisher[0] : '',
+                  publishedDate: doc.first_publish_year ? String(doc.first_publish_year) : '',
+                  description: '',
+                  language: doc.language ? doc.language[0] : 'en',
+                  categories: doc.subject ? doc.subject.slice(0, 5) : [],
+                  pageCount: doc.number_of_pages_median || 0,
+                  isbn: doc.isbn ? doc.isbn[0] : '',
+                  coverUrl: coverUrl,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      setResults(fallbackResults);
     } catch (err: any) {
-      console.error('Book search error:', err);
+      console.error('Client book search error:', err);
       setError('Could not fetch book covers. Please check your query or network connection.');
     } finally {
       setIsLoading(false);
@@ -136,12 +224,17 @@ export const CoverSearchModal: React.FC<CoverSearchModalProps> = ({
                   >
                     {/* Cover Preview Image */}
                     <div className="h-48 bg-[#0a0a0c] relative flex items-center justify-center overflow-hidden group">
-                      {proxyCoverUrl ? (
+                      {item.coverUrl ? (
                         <img
-                          src={proxyCoverUrl}
+                          src={proxyCoverUrl || item.coverUrl}
                           alt={item.title}
                           className="h-full w-full object-contain p-2 group-hover:scale-105 transition-transform duration-200"
                           loading="lazy"
+                          onError={(e) => {
+                            if (proxyCoverUrl && e.currentTarget.src !== item.coverUrl) {
+                              e.currentTarget.src = item.coverUrl;
+                            }
+                          }}
                         />
                       ) : (
                         <div className="flex flex-col items-center justify-center text-zinc-500 gap-1">
@@ -175,10 +268,10 @@ export const CoverSearchModal: React.FC<CoverSearchModalProps> = ({
                       <div className="pt-2 border-t border-white/10 flex flex-col gap-1.5">
                         <button
                           type="button"
-                          disabled={!proxyCoverUrl}
+                          disabled={!item.coverUrl}
                           onClick={() => {
-                            if (proxyCoverUrl) {
-                              onSelectCoverAndMetadata(proxyCoverUrl, {
+                            if (item.coverUrl) {
+                              onSelectCoverAndMetadata(item.coverUrl, {
                                 title: item.title,
                                 authors: item.authors,
                                 publisher: item.publisher,
@@ -191,7 +284,7 @@ export const CoverSearchModal: React.FC<CoverSearchModalProps> = ({
                             }
                           }}
                           className={`w-full py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
-                            proxyCoverUrl
+                            item.coverUrl
                               ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-2xs'
                               : 'bg-white/5 text-zinc-600 cursor-not-allowed'
                           }`}
@@ -200,11 +293,11 @@ export const CoverSearchModal: React.FC<CoverSearchModalProps> = ({
                           <span>Use Cover & Metadata</span>
                         </button>
 
-                        {proxyCoverUrl && (
+                        {item.coverUrl && (
                           <button
                             type="button"
                             onClick={() => {
-                              onSelectCoverAndMetadata(proxyCoverUrl);
+                              onSelectCoverAndMetadata(item.coverUrl);
                               onClose();
                             }}
                             className="w-full py-1 px-2 text-[11px] font-medium text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-colors text-center"
